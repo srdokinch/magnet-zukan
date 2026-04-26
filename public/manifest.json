@@ -1,0 +1,23 @@
+{
+  "name": "マグネット図鑑",
+  "short_name": "マグネット図鑑",
+  "description": "お土産マグネットを記録して飾れるスマホ向けPWA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF7ED",
+  "theme_color": "#F97316",
+  "lang": "ja",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
