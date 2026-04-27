@@ -5,6 +5,11 @@ import { FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 
+const isAuthSessionMissingError = (error: unknown) =>
+  error instanceof Error &&
+  (error.name === "AuthSessionMissingError" ||
+    error.message.includes("Auth session missing"));
+
 type NewMagnetForm = {
   name: string;
   photoUrl: string;
@@ -37,9 +42,23 @@ export default function NewMagnetPage() {
     setIsSubmitting(true);
 
     try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError && !isAuthSessionMissingError(userError)) {
+        throw userError;
+      }
+      if (!user) {
+        toast.error("投稿するにはログインが必要です。");
+        return;
+      }
+
       const { data, error } = await supabase
         .from("magnets")
         .insert({
+          user_id: user.id,
           name: form.name || null,
           photo_url: form.photoUrl,
           category: form.category || null,

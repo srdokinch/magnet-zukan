@@ -6,6 +6,11 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import type { Magnet } from "@/lib/magnets";
 
+const isAuthSessionMissingError = (error: unknown) =>
+  error instanceof Error &&
+  (error.name === "AuthSessionMissingError" ||
+    error.message.includes("Auth session missing"));
+
 export default function DictionaryPage() {
   const [magnets, setMagnets] = useState<Magnet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -13,9 +18,23 @@ export default function DictionaryPage() {
   useEffect(() => {
     const fetchMagnets = async () => {
       try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError && !isAuthSessionMissingError(userError)) {
+          throw userError;
+        }
+        if (!user) {
+          setMagnets([]);
+          return;
+        }
+
         const { data, error } = await supabase
           .from("magnets")
           .select("id,name,photo_url,category,comment,place_name,created_at")
+          .eq("user_id", user.id)
           .order("created_at", { ascending: false });
 
         if (error) {

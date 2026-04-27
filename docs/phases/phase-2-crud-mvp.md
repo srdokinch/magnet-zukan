@@ -14,6 +14,8 @@
 - マグネット共通型 `Magnet` を `src/lib/magnets.ts` に追加。
 - Supabase設定確認コマンド `npm run supabase:check` を追加。
 - Playwrightを導入し、投稿 -> 一覧 -> 詳細のE2Eテストを追加。
+- RLS有効化用SQL `supabase/migrations/002_enable_rls.sql` を追加（認証ユーザー本人データのみ許可）。
+- クライアント側で `supabase.auth.getUser()` を確認し、`user_id` を必須にした読み書きへ変更。
 
 ## 変更ファイル
 
@@ -24,6 +26,7 @@
 - `src/app/(main)/magnet/[id]/page.tsx`
 - `src/lib/magnets.ts`
 - `scripts/check-supabase-setup.mjs`
+- `supabase/migrations/002_enable_rls.sql`
 - `playwright.config.ts`
 - `tests/e2e/magnet-crud.spec.ts`
 - `package.json`
@@ -71,28 +74,33 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=あなたのanon publicキー
    - `supabase/migrations/001_init.sql` の内容を貼って実行する
    - `magnets` / `fridge_layouts` / `magnet_positions` が作成されることを確認する
 
-5. `magnets` テーブルへの動作確認データを登録  
+5. RLSを有効化してポリシー作成（必須）  
+   - `supabase/migrations/002_enable_rls.sql` の内容を `SQL Editor` で実行する
+   - 3テーブルでRLSが `enabled` になっていることを確認する
+   - 認証ユーザー本人の行のみ `select/insert/update/delete` できる状態にする
+
+6. `magnets` テーブルへの動作確認データを登録  
    - Supabaseダッシュボードの `Table Editor` で `magnets` を開く
    - 最低1件、`photo_url` を入れて手動登録しておく（表示確認用）
 
-6. アプリを起動  
+7. アプリを起動  
    - プロジェクトで `npm run dev` を実行
    - `http://localhost:3000` にアクセス
 
-7. 画面導線を確認  
+8. 画面導線を確認  
    - `/magnet/new` で投稿できること
    - `/` で一覧表示されること
    - `/magnet/[id]` で詳細表示されること
 
-8. セットアップ確認コマンドを実行  
+9. セットアップ確認コマンドを実行  
    - `npm run supabase:check` を実行し、接続と必須テーブル確認を通す
 
-9. E2Eテストを実行  
+10. E2Eテストを実行  
    - `npm run e2e` を実行
    - 環境変数がプレースホルダの間は自動で `skipped` になる
    - 実値設定後は投稿 -> 詳細 -> 一覧確認まで自動実行される
 
-10. よくある詰まりポイント  
+11. よくある詰まりポイント  
    - 環境変数の名前ミス（`NEXT_PUBLIC_` プレフィックス漏れ）
    - `001_init.sql` 未実行
    - `photo_url` 未入力（現在は必須）
