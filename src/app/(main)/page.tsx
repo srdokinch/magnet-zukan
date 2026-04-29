@@ -26,7 +26,18 @@ export default function DictionaryPage() {
         if (userError && !isAuthSessionMissingError(userError)) {
           throw userError;
         }
-        if (!user) {
+        let currentUser = user;
+        if (!currentUser) {
+          const { data: anonymousData, error: anonymousError } =
+            await supabase.auth.signInAnonymously();
+
+          if (anonymousError) {
+            throw anonymousError;
+          }
+          currentUser = anonymousData.user;
+        }
+
+        if (!currentUser) {
           setMagnets([]);
           return;
         }
@@ -34,7 +45,7 @@ export default function DictionaryPage() {
         const { data, error } = await supabase
           .from("magnets")
           .select("id,name,photo_url,category,comment,place_name,created_at")
-          .eq("user_id", user.id)
+          .eq("user_id", currentUser.id)
           .order("created_at", { ascending: false });
 
         if (error) {

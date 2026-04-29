@@ -23,6 +23,12 @@ test.describe("マグネットCRUD MVP", () => {
 
     await page.goto("/magnet/new");
 
+    // ルート不整合やサーバー未起動時に404待ちでタイムアウトしないよう、先に画面状態を明示チェックする
+    if (await page.getByRole("heading", { name: "404" }).isVisible()) {
+      throw new Error("`/magnet/new` が404です。開発サーバー起動状態とルーティングを確認してください。");
+    }
+    await expect(page.getByRole("heading", { name: "新規投稿" })).toBeVisible();
+
     await page.getByLabel("名前").fill(name);
     await page.getByLabel("写真URL（必須）").fill(photoUrl);
     await page.getByLabel("カテゴリ").fill(category);
