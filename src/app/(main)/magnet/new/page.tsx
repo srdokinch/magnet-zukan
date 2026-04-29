@@ -50,15 +50,24 @@ export default function NewMagnetPage() {
       if (userError && !isAuthSessionMissingError(userError)) {
         throw userError;
       }
-      if (!user) {
-        toast.error("投稿するにはログインが必要です。");
-        return;
+      let currentUser = user;
+      if (!currentUser) {
+        const { data: anonymousData, error: anonymousError } =
+          await supabase.auth.signInAnonymously();
+
+        if (anonymousError) {
+          throw anonymousError;
+        }
+        currentUser = anonymousData.user;
+      }
+      if (!currentUser) {
+        throw new Error("匿名セッションの作成に失敗しました。");
       }
 
       const { data, error } = await supabase
         .from("magnets")
         .insert({
-          user_id: user.id,
+          user_id: currentUser.id,
           name: form.name || null,
           photo_url: form.photoUrl,
           category: form.category || null,

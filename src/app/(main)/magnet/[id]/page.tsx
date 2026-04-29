@@ -29,7 +29,18 @@ export default function MagnetDetailPage() {
         if (userError && !isAuthSessionMissingError(userError)) {
           throw userError;
         }
-        if (!user) {
+        let currentUser = user;
+        if (!currentUser) {
+          const { data: anonymousData, error: anonymousError } =
+            await supabase.auth.signInAnonymously();
+
+          if (anonymousError) {
+            throw anonymousError;
+          }
+          currentUser = anonymousData.user;
+        }
+
+        if (!currentUser) {
           setMagnet(null);
           return;
         }
@@ -38,7 +49,7 @@ export default function MagnetDetailPage() {
           .from("magnets")
           .select("id,name,photo_url,category,comment,place_name,created_at")
           .eq("id", params.id)
-          .eq("user_id", user.id)
+          .eq("user_id", currentUser.id)
           .single();
 
         if (error) {
