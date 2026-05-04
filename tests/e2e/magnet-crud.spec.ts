@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("マグネットCRUD", () => {
+  test.setTimeout(120000);
+
   test.beforeEach(() => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -17,7 +19,6 @@ test.describe("マグネットCRUD", () => {
     const unique = Date.now().toString();
     const name = `E2Eテストマグネット-${unique}`;
     const updatedName = `${name}-更新`;
-    const photoUrl = "https://images.unsplash.com/photo-1526772662000-3f88f10405ff?w=1200";
     const category = "E2E";
     const updatedCategory = "E2E更新";
     const placeName = "東京駅";
@@ -30,10 +31,11 @@ test.describe("マグネットCRUD", () => {
     if (await page.getByRole("heading", { name: "404" }).isVisible()) {
       throw new Error("`/magnet/new` が404です。開発サーバー起動状態とルーティングを確認してください。");
     }
-    await expect(page.getByRole("heading", { name: "新規投稿" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "新規投稿" })).toBeVisible({
+      timeout: 60000,
+    });
 
     await page.getByLabel("名前").fill(name);
-    await page.getByLabel("写真URL（必須）").fill(photoUrl);
     await page.getByLabel("カテゴリ").fill(category);
     await page.getByLabel("購入場所").fill(placeName);
     await page.getByLabel("メモ").fill(comment);

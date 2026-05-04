@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Playwright artifacts (may not exist; ESLint glob fails without this ignore)
+    "test-results/**",
   ]),
 ]);
 
