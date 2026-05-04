@@ -3,7 +3,12 @@ import { expect, test } from "@playwright/test";
 test.describe("マグネットCRUD", () => {
   test.setTimeout(120000);
 
-  test.beforeEach(() => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as unknown as { __MAGNET_ZUKAN_E2E__?: boolean }).__MAGNET_ZUKAN_E2E__ =
+        true;
+    });
+
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
     const hasRealConfig =

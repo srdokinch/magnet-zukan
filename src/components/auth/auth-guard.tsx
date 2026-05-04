@@ -37,8 +37,14 @@ export function AuthGuard({ children }: AuthGuardProps) {
   useEffect(() => {
     let isMounted = true;
     const isE2ERuntime =
-      typeof navigator !== "undefined" &&
-      (navigator.webdriver === true || navigator.userAgent.includes("HeadlessChrome"));
+      typeof window !== "undefined" &&
+      (Boolean(
+        (window as unknown as { __MAGNET_ZUKAN_E2E__?: boolean })
+          .__MAGNET_ZUKAN_E2E__,
+      ) ||
+        (typeof navigator !== "undefined" &&
+          (navigator.webdriver === true ||
+            /HeadlessChrome|Playwright/i.test(navigator.userAgent ?? ""))));
 
     if (isE2ERuntime) {
       const timer = setTimeout(() => {
