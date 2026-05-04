@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 
@@ -12,32 +12,53 @@ const isAuthSessionMissingError = (error: unknown) =>
 
 type NewMagnetForm = {
   name: string;
-  photoUrl: string;
   category: string;
   placeName: string;
+  price: string;
+  purchasedAt: string;
   comment: string;
 };
 
 const initialForm: NewMagnetForm = {
   name: "",
-  photoUrl: "",
   category: "",
   placeName: "",
+  price: "",
+  purchasedAt: "",
   comment: "",
 };
 
+const categoryOptions = ["旅行・観光", "食べ物・飲物", "動物・キャラ", "その他"];
+const aiSuggestedTags = ["陶器", "地中海", "青色"];
+const defaultPhotoUrl =
+  "https://images.unsplash.com/photo-1526772662000-3f88f10405ff?w=1200";
+
 export default function NewMagnetPage() {
   const [form, setForm] = useState<NewMagnetForm>(initialForm);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const objectPreviewUrl = useMemo(() => {
+    if (!photoFile) {
+      return null;
+    }
+    return URL.createObjectURL(photoFile);
+  }, [photoFile]);
 
-    if (!form.photoUrl.trim()) {
-      toast.error("写真URLは必須です。");
+  useEffect(() => {
+    if (!objectPreviewUrl) {
       return;
     }
+    return () => {
+      URL.revokeObjectURL(objectPreviewUrl);
+    };
+  }, [objectPreviewUrl]);
+
+  const previewUrl = objectPreviewUrl ?? defaultPhotoUrl;
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
 
     setIsSubmitting(true);
 
@@ -64,14 +85,40 @@ export default function NewMagnetPage() {
         throw new Error("匿名セッションの作成に失敗しました。");
       }
 
+      let uploadedPhotoUrl = defaultPhotoUrl;
+      if (photoFile) {
+        const extension = photoFile.name.split(".").pop()?.toLowerCase() ?? "jpg";
+        const safeExtension = extension.replace(/[^a-z0-9]/g, "") || "jpg";
+        const objectPath = `${currentUser.id}/${crypto.randomUUID()}.${safeExtension}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("magnet-photos")
+          .upload(objectPath, photoFile, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: photoFile.type || "image/jpeg",
+          });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("magnet-photos")
+          .getPublicUrl(objectPath);
+        uploadedPhotoUrl = publicUrlData.publicUrl;
+      }
+
       const { data, error } = await supabase
         .from("magnets")
         .insert({
           user_id: currentUser.id,
           name: form.name || null,
-          photo_url: form.photoUrl,
+          photo_url: uploadedPhotoUrl,
           category: form.category || null,
           place_name: form.placeName || null,
+          price: form.price.trim() ? Number(form.price) : null,
+          purchased_at: form.purchasedAt || null,
           comment: form.comment || null,
         })
         .select("id")
@@ -95,70 +142,188 @@ export default function NewMagnetPage() {
   };
 
   return (
-    <section className="space-y-4">
-      <h1 className="text-2xl font-bold text-gray-900">新規投稿</h1>
-      <form
-        className="space-y-4 rounded-[24px] bg-white p-5 shadow-sm"
-        onSubmit={handleSubmit}
-      >
-        <label className="block space-y-2">
-          <span className="text-sm font-semibold text-gray-700">名前</span>
-          <input
-            className="min-h-11 w-full rounded-2xl border border-orange-200 px-3 text-sm"
-            placeholder="例：北海道ラベンダーマグネット"
-            type="text"
-            value={form.name}
-            onChange={(event) => setForm({ ...form, name: event.target.value })}
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-semibold text-gray-700">写真URL（必須）</span>
-          <input
-            required
-            className="min-h-11 w-full rounded-2xl border border-orange-200 px-3 text-sm"
-            placeholder="https://..."
-            type="url"
-            value={form.photoUrl}
-            onChange={(event) => setForm({ ...form, photoUrl: event.target.value })}
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-semibold text-gray-700">カテゴリ</span>
-          <input
-            className="min-h-11 w-full rounded-2xl border border-orange-200 px-3 text-sm"
-            placeholder="例：観光地"
-            type="text"
-            value={form.category}
-            onChange={(event) => setForm({ ...form, category: event.target.value })}
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-semibold text-gray-700">購入場所</span>
-          <input
-            className="min-h-11 w-full rounded-2xl border border-orange-200 px-3 text-sm"
-            placeholder="例：札幌駅"
-            type="text"
-            value={form.placeName}
-            onChange={(event) => setForm({ ...form, placeName: event.target.value })}
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-semibold text-gray-700">メモ</span>
-          <textarea
-            className="w-full rounded-2xl border border-orange-200 px-3 py-3 text-sm"
-            placeholder="購入時のメモ"
-            rows={4}
-            value={form.comment}
-            onChange={(event) => setForm({ ...form, comment: event.target.value })}
-          />
-        </label>
+    <section className="space-y-6 pb-40">
+      <header className="sticky top-0 z-10 -mx-4 flex items-center justify-between border-b border-orange-100 bg-white/90 px-5 py-3 backdrop-blur">
         <button
-          disabled={isSubmitting}
-          type="submit"
-          className="min-h-11 w-full rounded-2xl bg-orange-500 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-orange-300"
+          type="button"
+          onClick={() => router.back()}
+          className="flex h-11 w-11 items-center justify-center rounded-full text-gray-400 transition hover:bg-orange-50"
+          aria-label="閉じる"
         >
-          {isSubmitting ? "追加中..." : "🧲 コレクションに追加"}
+          ×
         </button>
+        <h1 className="text-lg font-bold tracking-tight text-orange-600">新規投稿</h1>
+        <div className="w-11" />
+      </header>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <section>
+          <label className="relative block aspect-4/3 cursor-pointer overflow-hidden rounded-4xl border-2 border-dashed border-orange-200 bg-orange-50/40">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={previewUrl}
+              alt="写真プレビュー"
+              className="absolute inset-0 h-full w-full object-cover opacity-70"
+            />
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                setPhotoFile(file);
+              }}
+            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <div className="rounded-2xl bg-white/85 px-4 py-3 text-center shadow-sm">
+                <p className="text-2xl">📷</p>
+                <p className="text-xs font-semibold text-orange-600">
+                  {photoFile ? "画像を変更する" : "写真をアップロード"}
+                </p>
+              </div>
+            </div>
+          </label>
+        </section>
+
+        <section className="rounded-3xl border border-sky-100 bg-sky-50/60 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-sky-600">✨</span>
+            <h3 className="text-xs font-semibold tracking-wide text-sky-700">AI自動タグ提案</h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {aiSuggestedTags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs text-sky-700"
+                onClick={() => {
+                  if (form.comment.includes(`#${tag}`)) return;
+                  const nextComment = form.comment.trim()
+                    ? `${form.comment} #${tag}`
+                    : `#${tag}`;
+                  setForm({ ...form, comment: nextComment });
+                }}
+              >
+                #{tag} ＋
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <div className="space-y-4">
+          <label className="block space-y-2">
+            <span className="px-1 text-xs font-semibold tracking-wide text-gray-500">マグネット名</span>
+            <input
+              className="h-14 w-full rounded-3xl border-none bg-white px-6 text-sm shadow-sm ring-1 ring-orange-100 placeholder:text-gray-300 focus:ring-2 focus:ring-orange-300"
+              placeholder="例：アマルフィの思い出"
+              type="text"
+              value={form.name}
+              onChange={(event) => setForm({ ...form, name: event.target.value })}
+              aria-label="名前"
+            />
+          </label>
+
+          <div className="space-y-2">
+            <span className="block px-1 text-xs font-semibold tracking-wide text-gray-500">カテゴリ</span>
+            <div className="hide-scrollbar flex gap-2 overflow-x-auto pb-1">
+              {categoryOptions.map((option) => {
+                const active = form.category === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setForm({ ...form, category: option })}
+                    className={`whitespace-nowrap rounded-full px-5 py-2 text-xs font-semibold transition ${
+                      active
+                        ? "bg-orange-500 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+            <input
+              className="h-12 w-full rounded-3xl border-none bg-white px-6 text-sm shadow-sm ring-1 ring-orange-100 placeholder:text-gray-300 focus:ring-2 focus:ring-orange-300"
+              placeholder="自由入力も可能"
+              type="text"
+              value={form.category}
+              onChange={(event) => setForm({ ...form, category: event.target.value })}
+              aria-label="カテゴリ"
+            />
+          </div>
+
+          <label className="block space-y-2">
+            <span className="px-1 text-xs font-semibold tracking-wide text-gray-500">購入場所</span>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-gray-400">
+                📍
+              </span>
+              <input
+                className="h-14 w-full rounded-3xl border-none bg-white pl-12 pr-6 text-sm shadow-sm ring-1 ring-orange-100 placeholder:text-gray-300 focus:ring-2 focus:ring-orange-300"
+                placeholder="場所を検索"
+                type="text"
+                value={form.placeName}
+                onChange={(event) => setForm({ ...form, placeName: event.target.value })}
+                aria-label="購入場所"
+              />
+            </div>
+          </label>
+
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block space-y-2">
+              <span className="px-1 text-xs font-semibold tracking-wide text-gray-500">値段</span>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-gray-400">
+                  ¥
+                </span>
+                <input
+                  className="h-14 w-full rounded-3xl border-none bg-white pl-10 pr-6 text-sm shadow-sm ring-1 ring-orange-100 placeholder:text-gray-300 focus:ring-2 focus:ring-orange-300"
+                  placeholder="500"
+                  type="number"
+                  min={0}
+                  value={form.price}
+                  onChange={(event) => setForm({ ...form, price: event.target.value })}
+                />
+              </div>
+            </label>
+            <label className="block space-y-2">
+              <span className="px-1 text-xs font-semibold tracking-wide text-gray-500">購入日</span>
+              <input
+                className="h-14 w-full rounded-3xl border-none bg-white px-6 text-sm shadow-sm ring-1 ring-orange-100 focus:ring-2 focus:ring-orange-300"
+                type="date"
+                value={form.purchasedAt}
+                onChange={(event) => setForm({ ...form, purchasedAt: event.target.value })}
+              />
+            </label>
+          </div>
+
+          <label className="block space-y-2">
+            <span className="px-1 text-xs font-semibold tracking-wide text-gray-500">メモ</span>
+            <textarea
+              className="w-full resize-none rounded-3xl border-none bg-white px-6 py-4 text-sm shadow-sm ring-1 ring-orange-100 placeholder:text-gray-300 focus:ring-2 focus:ring-orange-300"
+              placeholder="思い出や特徴をメモしましょう"
+              rows={4}
+              value={form.comment}
+              onChange={(event) => setForm({ ...form, comment: event.target.value })}
+              aria-label="メモ"
+            />
+          </label>
+        </div>
+
+        <div className="fixed inset-x-0 bottom-20 z-40 px-5">
+          <div className="mx-auto w-full max-w-md">
+            <button
+              disabled={isSubmitting}
+              type="submit"
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-orange-500 px-4 text-base font-bold text-white shadow-[0_8px_30px_rgba(249,115,22,0.3)] transition disabled:cursor-not-allowed disabled:bg-orange-300"
+            >
+              <span>💾</span>
+              {isSubmitting ? "追加中..." : "🧲 コレクションに追加"}
+            </button>
+          </div>
+        </div>
       </form>
     </section>
   );
