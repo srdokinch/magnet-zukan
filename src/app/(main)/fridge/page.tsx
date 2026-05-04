@@ -64,36 +64,18 @@ export default function FridgePage() {
       return;
     }
 
-    const { data: existing, error: selectError } = await supabase
-      .from("magnet_positions")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("magnet_id", magnetId)
-      .maybeSingle();
+    const { error } = await supabase.from("magnet_positions").upsert(
+      {
+        user_id: userId,
+        magnet_id: magnetId,
+        x: position.x,
+        y: position.y,
+      },
+      { onConflict: "user_id,magnet_id" },
+    );
 
-    if (selectError) {
-      throw selectError;
-    }
-
-    if (existing?.id) {
-      const { error: updateError } = await supabase
-        .from("magnet_positions")
-        .update({ x: position.x, y: position.y })
-        .eq("id", existing.id);
-      if (updateError) {
-        throw updateError;
-      }
-      return;
-    }
-
-    const { error: insertError } = await supabase.from("magnet_positions").insert({
-      user_id: userId,
-      magnet_id: magnetId,
-      x: position.x,
-      y: position.y,
-    });
-    if (insertError) {
-      throw insertError;
+    if (error) {
+      throw error;
     }
   };
 
