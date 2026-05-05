@@ -49,7 +49,7 @@ export default function MagnetDetailPage() {
 
         const { data, error } = await supabase
           .from("magnets")
-          .select("id,name,photo_url,category,comment,place_name,created_at")
+          .select("id,name,photo_url,category,tags,comment,place_name,created_at")
           .eq("id", params.id)
           .eq("user_id", currentUser.id)
           .single();
@@ -161,6 +161,18 @@ export default function MagnetDetailPage() {
             <p className="text-sm text-gray-600">
               購入場所: {magnet.place_name ?? "未設定"}
             </p>
+            {magnet.tags && magnet.tags.length > 0 ? (
+              <div className="flex flex-wrap gap-2 pt-1" aria-label="タグ一覧">
+                {magnet.tags.map((tag, index) => (
+                  <span
+                    key={`${tag}-${String(index)}`}
+                    className="inline-flex min-h-8 items-center rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             <p className="text-sm text-gray-600">メモ: {magnet.comment ?? "なし"}</p>
           </div>
           <div className="grid grid-cols-2 gap-2 pt-2">

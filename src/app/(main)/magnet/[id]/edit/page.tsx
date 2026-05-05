@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { TagChipInput } from "@/components/magnet/tag-chip-input";
 import { uploadMagnetPhotoToStorage } from "@/lib/magnet-photo-upload";
 import { supabase } from "@/lib/supabase";
 
@@ -17,6 +18,7 @@ type EditMagnetForm = {
   category: string;
   placeName: string;
   comment: string;
+  tags: string[];
 };
 
 const initialForm: EditMagnetForm = {
@@ -25,6 +27,7 @@ const initialForm: EditMagnetForm = {
   category: "",
   placeName: "",
   comment: "",
+  tags: [],
 };
 
 export default function EditMagnetPage() {
@@ -81,7 +84,7 @@ export default function EditMagnetPage() {
 
         const { data, error } = await supabase
           .from("magnets")
-          .select("name,photo_url,category,place_name,comment")
+          .select("name,photo_url,category,place_name,comment,tags")
           .eq("id", params.id)
           .eq("user_id", currentUser.id)
           .single();
@@ -90,12 +93,17 @@ export default function EditMagnetPage() {
           throw error;
         }
 
+        const rowTags = Array.isArray(data.tags)
+          ? data.tags.filter((t): t is string => typeof t === "string")
+          : [];
+
         setForm({
           name: data.name ?? "",
           photoUrl: data.photo_url,
           category: data.category ?? "",
           placeName: data.place_name ?? "",
           comment: data.comment ?? "",
+          tags: rowTags,
         });
       } catch (error: unknown) {
         toast.error("編集対象データの取得に失敗しました。");
@@ -161,6 +169,7 @@ export default function EditMagnetPage() {
           category: form.category || null,
           place_name: form.placeName || null,
           comment: form.comment || null,
+          tags: form.tags.length > 0 ? form.tags : null,
         })
         .eq("id", params.id)
         .eq("user_id", currentUser.id);
@@ -253,6 +262,11 @@ export default function EditMagnetPage() {
               aria-label="購入場所"
             />
           </label>
+          <TagChipInput
+            tags={form.tags}
+            onChange={(next) => setForm({ ...form, tags: next })}
+            hint="カンマ区切りで複数入力できます。"
+          />
           <label className="block space-y-2">
             <span className="text-sm font-semibold text-gray-700">メモ</span>
             <textarea
