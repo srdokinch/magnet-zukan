@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { uploadMagnetPhotoToStorage } from "@/lib/magnet-photo-upload";
 import { supabase } from "@/lib/supabase";
 
 const isAuthSessionMissingError = (error: unknown) =>
@@ -30,8 +31,27 @@ export default function EditMagnetPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const [form, setForm] = useState<EditMagnetForm>(initialForm);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const objectPreviewUrl = useMemo(() => {
+    if (!photoFile) {
+      return null;
+    }
+    return URL.createObjectURL(photoFile);
+  }, [photoFile]);
+
+  useEffect(() => {
+    if (!objectPreviewUrl) {
+      return;
+    }
+    return () => {
+      URL.revokeObjectURL(objectPreviewUrl);
+    };
+  }, [objectPreviewUrl]);
+
+  const previewUrl = objectPreviewUrl ?? form.photoUrl;
 
   useEffect(() => {
     const fetchMagnet = async () => {
@@ -93,8 +113,8 @@ export default function EditMagnetPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!form.photoUrl.trim()) {
-      toast.error("写真URLは必須です。");
+    if (!form.photoUrl.trim() && !photoFile) {
+      toast.error("写真が設定されていません。画像をアップロードしてください。");
       return;
     }
 
@@ -124,11 +144,20 @@ export default function EditMagnetPage() {
         throw new Error("匿名セッションの作成に失敗しました。");
       }
 
+      let photoUrl = form.photoUrl.trim();
+      if (photoFile) {
+        photoUrl = await uploadMagnetPhotoToStorage(
+          supabase,
+          currentUser.id,
+          photoFile,
+        );
+      }
+
       const { error } = await supabase
         .from("magnets")
         .update({
           name: form.name || null,
-          photo_url: form.photoUrl,
+          photo_url: photoUrl,
           category: form.category || null,
           place_name: form.placeName || null,
           comment: form.comment || null,
@@ -163,6 +192,33 @@ export default function EditMagnetPage() {
           className="space-y-4 rounded-[24px] bg-white p-5 shadow-sm"
           onSubmit={handleSubmit}
         >
+          <label className="relative block aspect-4/3 cursor-pointer overflow-hidden rounded-2xl border-2 border-dashed border-orange-200 bg-orange-50/40">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={previewUrl}
+              alt="写真プレビュー"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                setPhotoFile(file);
+              }}
+              aria-label="写真を差し替え（任意）"
+            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20">
+              <div className="rounded-2xl bg-white/90 px-4 py-3 text-center shadow-sm">
+                <p className="text-2xl">📷</p>
+                <p className="text-xs font-semibold text-orange-600">
+                  {photoFile ? "画像を変更する" : "写真を差し替え（任意）"}
+                </p>
+              </div>
+            </div>
+          </label>
+
           <label className="block space-y-2">
             <span className="text-sm font-semibold text-gray-700">名前</span>
             <input
@@ -170,16 +226,7 @@ export default function EditMagnetPage() {
               type="text"
               value={form.name}
               onChange={(event) => setForm({ ...form, name: event.target.value })}
-            />
-          </label>
-          <label className="block space-y-2">
-            <span className="text-sm font-semibold text-gray-700">写真URL（必須）</span>
-            <input
-              required
-              className="min-h-11 w-full rounded-2xl border border-orange-200 px-3 text-sm"
-              type="url"
-              value={form.photoUrl}
-              onChange={(event) => setForm({ ...form, photoUrl: event.target.value })}
+              aria-label="名前"
             />
           </label>
           <label className="block space-y-2">
@@ -188,7 +235,10 @@ export default function EditMagnetPage() {
               className="min-h-11 w-full rounded-2xl border border-orange-200 px-3 text-sm"
               type="text"
               value={form.category}
-              onChange={(event) => setForm({ ...form, category: event.target.value })}
+              onChange={(event) =>
+                setForm({ ...form, category: event.target.value })
+              }
+              aria-label="カテゴリ"
             />
           </label>
           <label className="block space-y-2">
@@ -197,7 +247,10 @@ export default function EditMagnetPage() {
               className="min-h-11 w-full rounded-2xl border border-orange-200 px-3 text-sm"
               type="text"
               value={form.placeName}
-              onChange={(event) => setForm({ ...form, placeName: event.target.value })}
+              onChange={(event) =>
+                setForm({ ...form, placeName: event.target.value })
+              }
+              aria-label="購入場所"
             />
           </label>
           <label className="block space-y-2">
@@ -206,7 +259,10 @@ export default function EditMagnetPage() {
               className="w-full rounded-2xl border border-orange-200 px-3 py-3 text-sm"
               rows={4}
               value={form.comment}
-              onChange={(event) => setForm({ ...form, comment: event.target.value })}
+              onChange={(event) =>
+                setForm({ ...form, comment: event.target.value })
+              }
+              aria-label="メモ"
             />
           </label>
           <button

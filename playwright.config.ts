@@ -23,10 +23,12 @@ export default defineConfig({
   ...(shouldStartWebServer
     ? {
         webServer: {
-          command: `npx next dev --hostname 127.0.0.1 --port ${webServerPort}`,
+          // `next dev` は同一リポジトリで1プロセスのみの制限があり、手元で dev が動いていると E2E 用の2台目が起動できない。
+          // `next start` は本番サーバのため dev と併存できる。
+          command: `npm run build && npx next start --hostname 127.0.0.1 --port ${webServerPort}`,
           url: baseURL,
           reuseExistingServer: !process.env.CI,
-          timeout: 120000,
+          timeout: 300000,
         },
       }
     : {}),

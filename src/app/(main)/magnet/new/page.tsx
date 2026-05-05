@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { uploadMagnetPhotoToStorage } from "@/lib/magnet-photo-upload";
 import { supabase } from "@/lib/supabase";
 
 const isAuthSessionMissingError = (error: unknown) =>
@@ -87,26 +88,11 @@ export default function NewMagnetPage() {
 
       let uploadedPhotoUrl = defaultPhotoUrl;
       if (photoFile) {
-        const extension = photoFile.name.split(".").pop()?.toLowerCase() ?? "jpg";
-        const safeExtension = extension.replace(/[^a-z0-9]/g, "") || "jpg";
-        const objectPath = `${currentUser.id}/${crypto.randomUUID()}.${safeExtension}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("magnet-photos")
-          .upload(objectPath, photoFile, {
-            cacheControl: "3600",
-            upsert: false,
-            contentType: photoFile.type || "image/jpeg",
-          });
-
-        if (uploadError) {
-          throw uploadError;
-        }
-
-        const { data: publicUrlData } = supabase.storage
-          .from("magnet-photos")
-          .getPublicUrl(objectPath);
-        uploadedPhotoUrl = publicUrlData.publicUrl;
+        uploadedPhotoUrl = await uploadMagnetPhotoToStorage(
+          supabase,
+          currentUser.id,
+          photoFile,
+        );
       }
 
       const { data, error } = await supabase
