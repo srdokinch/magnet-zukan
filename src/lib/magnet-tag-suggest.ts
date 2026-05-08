@@ -3,9 +3,22 @@ import { supabase } from "@/lib/supabase";
 
 const MAX_SUGGESTED_TAGS = 3;
 export const FALLBACK_AI_SUGGESTED_TAGS = ["陶器", "地中海", "青色"];
+export const AI_TAG_CANDIDATES = [
+  "陶器",
+  "地中海",
+  "青色",
+  "海",
+  "街並み",
+  "風景",
+  "食べ物",
+  "動物",
+  "旅行",
+  "カラフル",
+];
 
 type SuggestTagsResponse = {
   tags?: unknown;
+  scores?: Array<{ tag?: string; score?: number }>;
 };
 
 export type SuggestMagnetTagsResult = {
@@ -68,6 +81,7 @@ export async function suggestMagnetTags(file: File): Promise<SuggestMagnetTagsRe
       body: {
         imageBase64,
         mimeType: compressedFile.type || "image/jpeg",
+        candidateTags: AI_TAG_CANDIDATES,
       },
     });
 

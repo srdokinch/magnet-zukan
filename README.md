@@ -2,6 +2,26 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+1. Copy the env template.
+
+```bash
+cp .env.example .env.local
+```
+
+2. Fill `.env.local` with your local values.
+   - Required (app): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - Optional (scripts): `SUPABASE_SERVICE_ROLE_KEY`
+3. Set Supabase Edge Function secrets for AI tag suggestion.
+   - Required: `HUGGING_FACE_API_KEY`
+   - Optional tuning: `AI_TAG_MIN_SCORE_THRESHOLD` (`0.0` - `1.0`, default `0.25`)
+
+```bash
+supabase secrets set HUGGING_FACE_API_KEY=YOUR_HUGGING_FACE_API_KEY
+supabase secrets set AI_TAG_MIN_SCORE_THRESHOLD=0.25
+```
+
+4. Run the development server:
+
 First, run the development server:
 
 ```bash
