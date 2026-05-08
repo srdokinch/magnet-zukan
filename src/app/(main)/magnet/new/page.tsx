@@ -1,10 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { TagChipInput } from "@/components/magnet/tag-chip-input";
 import { uploadMagnetPhotoToStorage } from "@/lib/magnet-photo-upload";
+import {
+  FALLBACK_AI_SUGGESTED_TAGS,
+  suggestMagnetTags,
+} from "@/lib/magnet-tag-suggest";
 import { supabase } from "@/lib/supabase";
 
 const isAuthSessionMissingError = (error: unknown) =>
@@ -33,13 +37,15 @@ const initialForm: NewMagnetForm = {
 };
 
 const categoryOptions = ["旅行・観光", "食べ物・飲物", "動物・キャラ", "その他"];
-const aiSuggestedTags = ["陶器", "地中海", "青色"];
 const defaultPhotoUrl =
   "https://images.unsplash.com/photo-1526772662000-3f88f10405ff?w=1200";
 
 export default function NewMagnetPage() {
   const [form, setForm] = useState<NewMagnetForm>(initialForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [suggestedTags, setSuggestedTags] = useState<string[]>(FALLBACK_AI_SUGGESTED_TAGS);
+  const [isSuggestingTags, setIsSuggestingTags] = useState(false);
+  const suggestRequestIdRef = useRef(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
@@ -162,6 +168,29 @@ export default function NewMagnetPage() {
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
                 setPhotoFile(file);
+                suggestRequestIdRef.current += 1;
+                const requestId = suggestRequestIdRef.current;
+                if (!file) {
+                  setSuggestedTags(FALLBACK_AI_SUGGESTED_TAGS);
+                  setIsSuggestingTags(false);
+                  return;
+                }
+                setIsSuggestingTags(true);
+                void suggestMagnetTags(file)
+                  .then((result) => {
+                    if (requestId !== suggestRequestIdRef.current) {
+                      return;
+                    }
+                    setSuggestedTags(result.tags);
+                    if (result.isFallback) {
+                      toast.error("AIタグ提案の取得に失敗したため、固定候補を表示しています。");
+                    }
+                  })
+                  .finally(() => {
+                    if (requestId === suggestRequestIdRef.current) {
+                      setIsSuggestingTags(false);
+                    }
+                  });
               }}
             />
             <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -180,8 +209,11 @@ export default function NewMagnetPage() {
             <span className="text-sky-600">✨</span>
             <h3 className="text-xs font-semibold tracking-wide text-sky-700">AI自動タグ提案</h3>
           </div>
+          {isSuggestingTags ? (
+            <p className="mb-2 text-xs text-sky-700">候補を生成中...</p>
+          ) : null}
           <div className="flex flex-wrap gap-2">
-            {aiSuggestedTags.map((tag) => (
+            {suggestedTags.map((tag) => (
               <button
                 key={tag}
                 type="button"

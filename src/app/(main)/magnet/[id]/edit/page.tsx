@@ -1,10 +1,14 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { TagChipInput } from "@/components/magnet/tag-chip-input";
 import { uploadMagnetPhotoToStorage } from "@/lib/magnet-photo-upload";
+import {
+  FALLBACK_AI_SUGGESTED_TAGS,
+  suggestMagnetTags,
+} from "@/lib/magnet-tag-suggest";
 import { supabase } from "@/lib/supabase";
 
 const isAuthSessionMissingError = (error: unknown) =>
@@ -35,6 +39,9 @@ export default function EditMagnetPage() {
   const router = useRouter();
   const [form, setForm] = useState<EditMagnetForm>(initialForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [suggestedTags, setSuggestedTags] = useState<string[]>(FALLBACK_AI_SUGGESTED_TAGS);
+  const [isSuggestingTags, setIsSuggestingTags] = useState(false);
+  const suggestRequestIdRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -215,6 +222,29 @@ export default function EditMagnetPage() {
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
                 setPhotoFile(file);
+                suggestRequestIdRef.current += 1;
+                const requestId = suggestRequestIdRef.current;
+                if (!file) {
+                  setSuggestedTags(FALLBACK_AI_SUGGESTED_TAGS);
+                  setIsSuggestingTags(false);
+                  return;
+                }
+                setIsSuggestingTags(true);
+                void suggestMagnetTags(file)
+                  .then((result) => {
+                    if (requestId !== suggestRequestIdRef.current) {
+                      return;
+                    }
+                    setSuggestedTags(result.tags);
+                    if (result.isFallback) {
+                      toast.error("AIタグ提案の取得に失敗したため、固定候補を表示しています。");
+                    }
+                  })
+                  .finally(() => {
+                    if (requestId === suggestRequestIdRef.current) {
+                      setIsSuggestingTags(false);
+                    }
+                  });
               }}
               aria-label="写真を差し替え（任意）"
             />
@@ -227,6 +257,32 @@ export default function EditMagnetPage() {
               </div>
             </div>
           </label>
+          <section className="rounded-3xl border border-sky-100 bg-sky-50/60 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-sky-600">✨</span>
+              <h3 className="text-xs font-semibold tracking-wide text-sky-700">AI自動タグ提案</h3>
+            </div>
+            {isSuggestingTags ? (
+              <p className="mb-2 text-xs text-sky-700">候補を生成中...</p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              {suggestedTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs text-sky-700"
+                  onClick={() => {
+                    if (form.tags.includes(tag)) {
+                      return;
+                    }
+                    setForm({ ...form, tags: [...form.tags, tag] });
+                  }}
+                >
+                  #{tag} ＋
+                </button>
+              ))}
+            </div>
+          </section>
 
           <label className="block space-y-2">
             <span className="text-sm font-semibold text-gray-700">名前</span>
