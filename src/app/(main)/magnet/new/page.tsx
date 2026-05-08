@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { TagChipInput } from "@/components/magnet/tag-chip-input";
 import { uploadMagnetPhotoToStorage } from "@/lib/magnet-photo-upload";
 import { supabase } from "@/lib/supabase";
 
@@ -18,6 +19,7 @@ type NewMagnetForm = {
   price: string;
   purchasedAt: string;
   comment: string;
+  tags: string[];
 };
 
 const initialForm: NewMagnetForm = {
@@ -27,6 +29,7 @@ const initialForm: NewMagnetForm = {
   price: "",
   purchasedAt: "",
   comment: "",
+  tags: [],
 };
 
 const categoryOptions = ["旅行・観光", "食べ物・飲物", "動物・キャラ", "その他"];
@@ -102,6 +105,7 @@ export default function NewMagnetPage() {
           name: form.name || null,
           photo_url: uploadedPhotoUrl,
           category: form.category || null,
+          tags: form.tags.length > 0 ? form.tags : null,
           place_name: form.placeName || null,
           price: form.price.trim() ? Number(form.price) : null,
           purchased_at: form.purchasedAt || null,
@@ -183,11 +187,10 @@ export default function NewMagnetPage() {
                 type="button"
                 className="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs text-sky-700"
                 onClick={() => {
-                  if (form.comment.includes(`#${tag}`)) return;
-                  const nextComment = form.comment.trim()
-                    ? `${form.comment} #${tag}`
-                    : `#${tag}`;
-                  setForm({ ...form, comment: nextComment });
+                  if (form.tags.includes(tag)) {
+                    return;
+                  }
+                  setForm({ ...form, tags: [...form.tags, tag] });
                 }}
               >
                 #{tag} ＋
@@ -195,6 +198,14 @@ export default function NewMagnetPage() {
             ))}
           </div>
         </section>
+
+        <div className="rounded-3xl border border-orange-100 bg-white/80 p-4 shadow-sm">
+          <TagChipInput
+            tags={form.tags}
+            onChange={(next) => setForm({ ...form, tags: next })}
+            hint="カンマ区切りで複数入力できます。"
+          />
+        </div>
 
         <div className="space-y-4">
           <label className="block space-y-2">

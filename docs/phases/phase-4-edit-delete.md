@@ -39,4 +39,4 @@
 
 ## 次アクション
 
-- E2E 成功後に `/prepush` を実行する。
+- Phase 7（一覧の検索・カテゴリ・タグフィルタ、`magnets.tags` の保存）を `docs/phases/phase-7-search-filter.md` に沿って実装する。

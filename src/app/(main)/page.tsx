@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
+import { MagnetListFilters } from "@/components/magnet/magnet-list-filters";
 import type { Magnet } from "@/lib/magnets";
+import { supabase } from "@/lib/supabase";
 
 const isAuthSessionMissingError = (error: unknown) =>
   error instanceof Error &&
@@ -14,6 +15,9 @@ const isAuthSessionMissingError = (error: unknown) =>
 export default function DictionaryPage() {
   const [magnets, setMagnets] = useState<Magnet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchMagnets = async () => {
@@ -44,7 +48,7 @@ export default function DictionaryPage() {
 
         const { data, error } = await supabase
           .from("magnets")
-          .select("id,name,photo_url,category,comment,place_name,created_at")
+          .select("id,name,photo_url,category,tags,comment,place_name,created_at")
           .eq("user_id", currentUser.id)
           .order("created_at", { ascending: false });
 
@@ -64,10 +68,44 @@ export default function DictionaryPage() {
     void fetchMagnets();
   }, []);
 
+  const filteredMagnets = useMemo(() => {
+    return magnets.filter((m) => {
+      if (selectedCategory !== null && m.category !== selectedCategory) {
+        return false;
+      }
+      if (selectedTags.length > 0) {
+        const rowTags = m.tags ?? [];
+        for (const t of selectedTags) {
+          if (!rowTags.includes(t)) {
+            return false;
+          }
+        }
+      }
+      const q = searchQuery.trim().toLowerCase();
+      if (q.length > 0) {
+        const name = (m.name ?? "").toLowerCase();
+        const place = (m.place_name ?? "").toLowerCase();
+        const comment = (m.comment ?? "").toLowerCase();
+        if (!name.includes(q) && !place.includes(q) && !comment.includes(q)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [magnets, searchQuery, selectedCategory, selectedTags]);
+
+  const handleToggleTag = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
+  };
+
   return (
     <section className="space-y-4">
       <header className="rounded-3xl bg-white p-5 shadow-sm">
-        <p className="text-sm font-semibold text-orange-600">全{magnets.length}個</p>
+        <p className="text-sm font-semibold text-orange-600">
+          {filteredMagnets.length}/{magnets.length}個 表示中
+        </p>
         <h1 className="mt-1 text-2xl font-bold text-gray-900">マグネット図鑑</h1>
       </header>
 
@@ -77,28 +115,54 @@ export default function DictionaryPage() {
         </div>
       ) : magnets.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-orange-200 bg-white p-6 text-center text-gray-500">
-          まだ投稿がありません。<br />
+          まだ投稿がありません。
+          <br />
           下の「投稿」から最初のマグネットを追加しましょう。
         </div>
       ) : (
-        <ul className="space-y-3">
-          {magnets.map((magnet) => (
-            <li key={magnet.id}>
-              <Link
-                href={`/magnet/${magnet.id}`}
-                className="block rounded-3xl bg-white p-4 shadow-sm transition hover:bg-orange-50"
-              >
-                <p className="text-base font-bold text-gray-900">
-                  {magnet.name ?? "名前未設定のマグネット"}
-                </p>
-                <p className="mt-1 text-sm text-gray-600">
-                  {magnet.place_name ?? "購入場所未設定"}
-                  {magnet.category ? ` / ${magnet.category}` : ""}
-                </p>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <>
+          <MagnetListFilters
+            magnets={magnets}
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+            selectedCategory={selectedCategory}
+            onSelectedCategoryChange={setSelectedCategory}
+            selectedTags={selectedTags}
+            onToggleTag={handleToggleTag}
+          />
+
+          {filteredMagnets.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-orange-200 bg-white p-6 text-center text-gray-500">
+              条件に一致するマグネットがありません。
+              <br />
+              検索語やフィルタを変えてみてください。
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {filteredMagnets.map((magnet) => (
+                <li key={magnet.id}>
+                  <Link
+                    href={`/magnet/${magnet.id}`}
+                    className="block rounded-3xl bg-white p-4 shadow-sm transition hover:bg-orange-50"
+                  >
+                    <p className="text-base font-bold text-gray-900">
+                      {magnet.name ?? "名前未設定のマグネット"}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {magnet.place_name ?? "購入場所未設定"}
+                      {magnet.category ? ` / ${magnet.category}` : ""}
+                    </p>
+                    {magnet.tags && magnet.tags.length > 0 ? (
+                      <p className="mt-2 line-clamp-1 text-xs text-orange-600">
+                        {magnet.tags.map((t) => `#${t}`).join(" ")}
+                      </p>
+                    ) : null}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </section>
   );

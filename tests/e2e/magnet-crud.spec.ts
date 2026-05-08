@@ -44,6 +44,7 @@ test.describe("マグネットCRUD", () => {
     await page.getByLabel("カテゴリ").fill(category);
     await page.getByLabel("購入場所").fill(placeName);
     await page.getByLabel("メモ").fill(comment);
+    await page.getByRole("button", { name: /#陶器 ＋/ }).click();
     await page.getByRole("button", { name: "🧲 コレクションに追加" }).click();
 
     await expect(page).toHaveURL(/\/magnet\/.+/);
@@ -65,6 +66,9 @@ test.describe("マグネットCRUD", () => {
     await expect(page.getByText(`メモ: ${updatedComment}`)).toBeVisible();
 
     await page.goto("/");
+    await expect(page.getByRole("link", { name: updatedName })).toBeVisible();
+
+    await page.getByRole("button", { name: "タグ 陶器 で絞り込み" }).click();
     await expect(page.getByRole("link", { name: updatedName })).toBeVisible();
 
     page.once("dialog", (dialog) => dialog.accept());

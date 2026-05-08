@@ -3,6 +3,7 @@ export type Magnet = {
   name: string | null;
   photo_url: string;
   category: string | null;
+  tags: string[] | null;
   comment: string | null;
   place_name: string | null;
   created_at: string | null;

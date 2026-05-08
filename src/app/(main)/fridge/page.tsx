@@ -110,7 +110,7 @@ export default function FridgePage() {
 
         const { data: magnetData, error: magnetError } = await supabase
           .from("magnets")
-          .select("id,name,photo_url,category,comment,place_name,created_at")
+          .select("id,name,photo_url,category,tags,comment,place_name,created_at")
           .eq("user_id", currentUser.id)
           .order("created_at", { ascending: false });
 
