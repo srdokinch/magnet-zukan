@@ -1,10 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { TagChipInput } from "@/components/magnet/tag-chip-input";
 import { uploadMagnetPhotoToStorage } from "@/lib/magnet-photo-upload";
+import {
+  FALLBACK_AI_SUGGESTED_TAGS,
+  suggestMagnetTags,
+} from "@/lib/magnet-tag-suggest";
 import { supabase } from "@/lib/supabase";
 
 const isAuthSessionMissingError = (error: unknown) =>
@@ -33,13 +37,44 @@ const initialForm: NewMagnetForm = {
 };
 
 const categoryOptions = ["旅行・観光", "食べ物・飲物", "動物・キャラ", "その他"];
-const aiSuggestedTags = ["陶器", "地中海", "青色"];
 const defaultPhotoUrl =
   "https://images.unsplash.com/photo-1526772662000-3f88f10405ff?w=1200";
+
+const isHeicLikeFile = (file: File) => {
+  const mime = file.type.toLowerCase();
+  const name = file.name.toLowerCase();
+  return (
+    mime.includes("image/heic") ||
+    mime.includes("image/heif") ||
+    name.endsWith(".heic") ||
+    name.endsWith(".heif")
+  );
+};
+
+const convertHeicToJpeg = async (file: File) => {
+  const { default: heic2any } = await import("heic2any");
+  const converted = await heic2any({
+    blob: file,
+    toType: "image/jpeg",
+    quality: 0.9,
+  });
+  const blob = Array.isArray(converted) ? converted[0] : converted;
+  if (!(blob instanceof Blob)) {
+    throw new Error("HEIC画像の変換に失敗しました。");
+  }
+  const jpgName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
+  return new File([blob], jpgName, {
+    type: "image/jpeg",
+    lastModified: Date.now(),
+  });
+};
 
 export default function NewMagnetPage() {
   const [form, setForm] = useState<NewMagnetForm>(initialForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [suggestedTags, setSuggestedTags] = useState<string[]>(FALLBACK_AI_SUGGESTED_TAGS);
+  const [isSuggestingTags, setIsSuggestingTags] = useState(false);
+  const suggestRequestIdRef = useRef(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
@@ -160,8 +195,47 @@ export default function NewMagnetPage() {
               accept="image/*"
               className="hidden"
               onChange={(event) => {
-                const file = event.target.files?.[0] ?? null;
-                setPhotoFile(file);
+                suggestRequestIdRef.current += 1;
+                const requestId = suggestRequestIdRef.current;
+                const selectedFile = event.target.files?.[0] ?? null;
+                setPhotoFile(selectedFile);
+                if (!selectedFile) {
+                  setSuggestedTags(FALLBACK_AI_SUGGESTED_TAGS);
+                  setIsSuggestingTags(false);
+                  return;
+                }
+                setIsSuggestingTags(true);
+                void (async () => {
+                  let fileForProcessing = selectedFile;
+                  if (isHeicLikeFile(selectedFile)) {
+                    try {
+                      fileForProcessing = await convertHeicToJpeg(selectedFile);
+                      if (requestId === suggestRequestIdRef.current) {
+                        setPhotoFile(fileForProcessing);
+                      }
+                    } catch (error) {
+                      console.error(error);
+                      if (requestId === suggestRequestIdRef.current) {
+                        setSuggestedTags(FALLBACK_AI_SUGGESTED_TAGS);
+                        toast.error("HEIC画像の変換に失敗したため、固定候補を表示しています。");
+                      }
+                      return;
+                    }
+                  }
+
+                  const result = await suggestMagnetTags(fileForProcessing);
+                  if (requestId !== suggestRequestIdRef.current) {
+                    return;
+                  }
+                  setSuggestedTags(result.tags);
+                  if (result.isFallback) {
+                    toast.error("AIタグ提案の取得に失敗したため、固定候補を表示しています。");
+                  }
+                })().finally(() => {
+                  if (requestId === suggestRequestIdRef.current) {
+                    setIsSuggestingTags(false);
+                  }
+                });
               }}
             />
             <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -180,8 +254,11 @@ export default function NewMagnetPage() {
             <span className="text-sky-600">✨</span>
             <h3 className="text-xs font-semibold tracking-wide text-sky-700">AI自動タグ提案</h3>
           </div>
+          {isSuggestingTags ? (
+            <p className="mb-2 text-xs text-sky-700">候補を生成中...</p>
+          ) : null}
           <div className="flex flex-wrap gap-2">
-            {aiSuggestedTags.map((tag) => (
+            {suggestedTags.map((tag) => (
               <button
                 key={tag}
                 type="button"
