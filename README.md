@@ -12,12 +12,15 @@ cp .env.example .env.local
    - Required (app): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - Optional (scripts): `SUPABASE_SERVICE_ROLE_KEY`
 3. Set Supabase Edge Function secrets for AI tag suggestion.
-   - Required: `HUGGING_FACE_API_KEY`
-   - Optional tuning: `AI_TAG_MIN_SCORE_THRESHOLD` (`0.0` - `1.0`, default `0.25`)
+   - Required: `HUGGING_FACE_API_KEY`, `DEEPL_API_KEY`
+   - Optional endpoint override: `DEEPL_API_URL` (default: `https://api-free.deepl.com/v2/translate`)
+   - Optional debug: `DEBUG_AI_TAGS=true` (include intermediate labels in API response)
 
 ```bash
 supabase secrets set HUGGING_FACE_API_KEY=YOUR_HUGGING_FACE_API_KEY
-supabase secrets set AI_TAG_MIN_SCORE_THRESHOLD=0.25
+supabase secrets set DEEPL_API_KEY=YOUR_DEEPL_API_KEY
+supabase secrets set DEEPL_API_URL=https://api-free.deepl.com/v2/translate
+supabase secrets set DEBUG_AI_TAGS=true
 ```
 
 4. Run the development server:
@@ -57,4 +60,4 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## Privacy Note
 
-- AIタグ提案機能では、選択した画像を外部AIサービス（Hugging Face Inference API）へ送信する場合があります。
+- AIタグ提案機能では、選択した画像を外部AIサービス（Hugging Face Inference API / DeepL API）へ送信する場合があります。

@@ -8,21 +8,21 @@
 
 ## 方針
 
-- 推論バックエンド: Supabase Edge Functions + Hugging Face Inference API（無料枠）。
-- モデル: `openai/clip-vit-large-patch14` を利用したゼロショット分類。
-- 推論方法: 候補タグ配列を `candidate_labels` として渡し、スコア上位を最大3件返却。
-- 精度制御: スコア閾値（既定値 `0.25`）未満は除外し、低信頼時は空配列を返す。
+- 推論バックエンド: Supabase Edge Functions + Hugging Face Inference API + DeepL API。
+- モデル: `google/vit-base-patch16-224`（画像分類）+ DeepL 翻訳 API（英語ラベルを日本語へ変換）。
+- 推論方法: 画像分類で得た英語ラベル上位を DeepL へ渡し、短い日本語タグを最大3件返却。
 - 失敗時: クライアントが固定候補 `["陶器", "地中海", "青色"]` へフォールバック。
 
 ## 実装内容
 
 - `supabase/functions/suggest-tags/index.ts`
-  - Base64 画像と候補タグ配列を受け取り、Hugging Face API に送信。
-  - ゼロショット分類のスコアを閾値でフィルタし、`{ tags: string[], scores }` を返却。
+  - Base64 画像を受け取り、画像分類モデルで英語ラベルを抽出。
+  - 抽出ラベルを DeepL で日本語タグ化し、`{ tags: string[], scores }` を返却。
+  - 配列/文字列/文字数/文体パターンを検証し、失敗時は固定候補へフォールバック。
+  - `DEBUG_AI_TAGS=true` 時は `debug.imageLabels` と `debug.deepl`（status/error/raw/入力/翻訳結果）を返却。
   - CORS とエラーレスポンスを実装。
 - `src/lib/magnet-tag-suggest.ts`
   - `browser-image-compression` で画像を縮小してから Edge Function を呼び出し。
-  - 候補タグ配列 `AI_TAG_CANDIDATES` を Edge Function へ渡す。
   - E2E 実行時（`window.__MAGNET_ZUKAN_E2E__`）は外部呼び出しをスキップして固定候補を返却。
 - `src/app/(main)/magnet/new/page.tsx`
   - 固定配列を state 化し、画像選択時に候補を再生成。
@@ -35,12 +35,13 @@
 ## 環境変数
 
 - ローカル開発:
-  - `HUGGING_FACE_API_KEY` を Supabase Edge Function 実行環境で参照可能にする。
-  - 任意で `AI_TAG_MIN_SCORE_THRESHOLD`（`0`〜`1`）を設定し、タグ採用の閾値を調整する。
-  - 任意で `DEBUG_AI_TAGS=true` を設定すると、レスポンスに `debug.imageLabels` など中間推論情報を含める。
+  - `HUGGING_FACE_API_KEY` と `DEEPL_API_KEY` を Supabase Edge Function 実行環境で参照可能にする。
+  - 任意で `DEEPL_API_URL` を設定し、`api-free` / `api` エンドポイントを切り替える。
+  - 任意で `DEBUG_AI_TAGS=true` を設定すると、レスポンスに `debug.imageLabels` と `debug.deepl` を含める。
 - 本番:
   - `supabase secrets set HUGGING_FACE_API_KEY=...` を使用。
-  - 必要に応じて `supabase secrets set AI_TAG_MIN_SCORE_THRESHOLD=0.30` のように設定する。
+  - `supabase secrets set DEEPL_API_KEY=...` を使用。
+  - 必要に応じて `supabase secrets set DEEPL_API_URL=https://api.deepl.com/v2/translate` のように設定する。
   - `DEBUG_AI_TAGS` は本番では通常 `false` のまま運用する。
 
 ## リスク・補足

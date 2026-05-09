@@ -40,6 +40,35 @@ const categoryOptions = ["旅行・観光", "食べ物・飲物", "動物・キ�
 const defaultPhotoUrl =
   "https://images.unsplash.com/photo-1526772662000-3f88f10405ff?w=1200";
 
+const isHeicLikeFile = (file: File) => {
+  const mime = file.type.toLowerCase();
+  const name = file.name.toLowerCase();
+  return (
+    mime.includes("image/heic") ||
+    mime.includes("image/heif") ||
+    name.endsWith(".heic") ||
+    name.endsWith(".heif")
+  );
+};
+
+const convertHeicToJpeg = async (file: File) => {
+  const { default: heic2any } = await import("heic2any");
+  const converted = await heic2any({
+    blob: file,
+    toType: "image/jpeg",
+    quality: 0.9,
+  });
+  const blob = Array.isArray(converted) ? converted[0] : converted;
+  if (!(blob instanceof Blob)) {
+    throw new Error("HEIC画像の変換に失敗しました。");
+  }
+  const jpgName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
+  return new File([blob], jpgName, {
+    type: "image/jpeg",
+    lastModified: Date.now(),
+  });
+};
+
 export default function NewMagnetPage() {
   const [form, setForm] = useState<NewMagnetForm>(initialForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -166,31 +195,47 @@ export default function NewMagnetPage() {
               accept="image/*"
               className="hidden"
               onChange={(event) => {
-                const file = event.target.files?.[0] ?? null;
-                setPhotoFile(file);
                 suggestRequestIdRef.current += 1;
                 const requestId = suggestRequestIdRef.current;
-                if (!file) {
+                const selectedFile = event.target.files?.[0] ?? null;
+                setPhotoFile(selectedFile);
+                if (!selectedFile) {
                   setSuggestedTags(FALLBACK_AI_SUGGESTED_TAGS);
                   setIsSuggestingTags(false);
                   return;
                 }
                 setIsSuggestingTags(true);
-                void suggestMagnetTags(file)
-                  .then((result) => {
-                    if (requestId !== suggestRequestIdRef.current) {
+                void (async () => {
+                  let fileForProcessing = selectedFile;
+                  if (isHeicLikeFile(selectedFile)) {
+                    try {
+                      fileForProcessing = await convertHeicToJpeg(selectedFile);
+                      if (requestId === suggestRequestIdRef.current) {
+                        setPhotoFile(fileForProcessing);
+                      }
+                    } catch (error) {
+                      console.error(error);
+                      if (requestId === suggestRequestIdRef.current) {
+                        setSuggestedTags(FALLBACK_AI_SUGGESTED_TAGS);
+                        toast.error("HEIC画像の変換に失敗したため、固定候補を表示しています。");
+                      }
                       return;
                     }
-                    setSuggestedTags(result.tags);
-                    if (result.isFallback) {
-                      toast.error("AIタグ提案の取得に失敗したため、固定候補を表示しています。");
-                    }
-                  })
-                  .finally(() => {
-                    if (requestId === suggestRequestIdRef.current) {
-                      setIsSuggestingTags(false);
-                    }
-                  });
+                  }
+
+                  const result = await suggestMagnetTags(fileForProcessing);
+                  if (requestId !== suggestRequestIdRef.current) {
+                    return;
+                  }
+                  setSuggestedTags(result.tags);
+                  if (result.isFallback) {
+                    toast.error("AIタグ提案の取得に失敗したため、固定候補を表示しています。");
+                  }
+                })().finally(() => {
+                  if (requestId === suggestRequestIdRef.current) {
+                    setIsSuggestingTags(false);
+                  }
+                });
               }}
             />
             <div className="absolute inset-0 flex flex-col items-center justify-center">
