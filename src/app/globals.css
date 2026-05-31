@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fff7ed;
-  --foreground: #1f2937;
+  --background: #fff8f6;
+  --foreground: #251913;
   --accent: #f97316;
-  --sub-accent: #fcd34d;
+  --sub-accent: #ffb690;
 }
 
 @theme inline {
@@ -12,12 +12,12 @@
   --color-foreground: var(--foreground);
   --color-accent: var(--accent);
   --color-sub-accent: var(--sub-accent);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-plus-jakarta-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), "Hiragino Maru Gothic ProN", sans-serif;
+  font-family: var(--font-plus-jakarta-sans), "Hiragino Maru Gothic ProN", sans-serif;
 }

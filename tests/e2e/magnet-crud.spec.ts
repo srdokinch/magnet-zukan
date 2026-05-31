@@ -44,8 +44,9 @@ test.describe("マグネットCRUD", () => {
     await page.getByLabel("カテゴリ").fill(category);
     await page.getByLabel("購入場所").fill(placeName);
     await page.getByLabel("メモ").fill(comment);
-    await page.getByRole("button", { name: /#陶器 ＋/ }).click();
-    await page.getByRole("button", { name: "🧲 コレクションに追加" }).click();
+    const aiTagSection = page.locator("section.rounded-3xl.border.border-sky-100");
+    await aiTagSection.getByRole("button").first().click();
+    await page.locator("form button[type='submit']").click();
 
     await expect(page).toHaveURL(/\/magnet\/.+/);
     await expect(page.getByText(name)).toBeVisible();

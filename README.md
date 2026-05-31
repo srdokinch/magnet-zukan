@@ -2,6 +2,29 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+1. Copy the env template.
+
+```bash
+cp .env.example .env.local
+```
+
+2. Fill `.env.local` with your local values.
+   - Required (app): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - Optional (scripts): `SUPABASE_SERVICE_ROLE_KEY`
+3. Set Supabase Edge Function secrets for AI tag suggestion.
+   - Required: `HUGGING_FACE_API_KEY`, `DEEPL_API_KEY`
+   - Optional endpoint override: `DEEPL_API_URL` (default: `https://api-free.deepl.com/v2/translate`)
+   - Optional debug: `DEBUG_AI_TAGS=true` (include intermediate labels and OCR data in API response)
+
+```bash
+supabase secrets set HUGGING_FACE_API_KEY=YOUR_HUGGING_FACE_API_KEY
+supabase secrets set DEEPL_API_KEY=YOUR_DEEPL_API_KEY
+supabase secrets set DEEPL_API_URL=https://api-free.deepl.com/v2/translate
+supabase secrets set DEBUG_AI_TAGS=true
+```
+
+4. Run the development server:
+
 First, run the development server:
 
 ```bash
@@ -34,3 +57,7 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Privacy Note
+
+- AIタグ提案機能では、選択した画像を外部AIサービス（Hugging Face Inference API / DeepL API）へ送信する場合があります。

@@ -1,10 +1,15 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { TagChipInput } from "@/components/magnet/tag-chip-input";
 import { uploadMagnetPhotoToStorage } from "@/lib/magnet-photo-upload";
+import {
+  FALLBACK_AI_SUGGESTED_TAGS,
+  suggestMagnetTags,
+} from "@/lib/magnet-tag-suggest";
+import { resolveDroppedImageAsFile } from "@/lib/resolve-dropped-image";
 import { supabase } from "@/lib/supabase";
 
 const isAuthSessionMissingError = (error: unknown) =>
@@ -35,6 +40,10 @@ export default function EditMagnetPage() {
   const router = useRouter();
   const [form, setForm] = useState<EditMagnetForm>(initialForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [suggestedTags, setSuggestedTags] = useState<string[]>(FALLBACK_AI_SUGGESTED_TAGS);
+  const [isSuggestingTags, setIsSuggestingTags] = useState(false);
+  const [isDragOverPhoto, setIsDragOverPhoto] = useState(false);
+  const suggestRequestIdRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -55,6 +64,55 @@ export default function EditMagnetPage() {
   }, [objectPreviewUrl]);
 
   const previewUrl = objectPreviewUrl ?? form.photoUrl;
+
+  const handlePhotoSelected = (file: File | null) => {
+    setPhotoFile(file);
+    suggestRequestIdRef.current += 1;
+    const requestId = suggestRequestIdRef.current;
+    if (!file) {
+      setSuggestedTags(FALLBACK_AI_SUGGESTED_TAGS);
+      setIsSuggestingTags(false);
+      return;
+    }
+    setIsSuggestingTags(true);
+    void suggestMagnetTags(file)
+      .then((result) => {
+        if (requestId !== suggestRequestIdRef.current) {
+          return;
+        }
+        setSuggestedTags(result.tags);
+        if (result.isFallback) {
+          toast.error("AIタグ提案の取得に失敗したため、固定候補を表示しています。");
+        }
+      })
+      .finally(() => {
+        if (requestId === suggestRequestIdRef.current) {
+          setIsSuggestingTags(false);
+        }
+      });
+  };
+
+  const handlePhotoDrop = async (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragOverPhoto(false);
+    const { file, hadPayload } = await resolveDroppedImageAsFile(event.dataTransfer);
+    if (file) {
+      handlePhotoSelected(file);
+      return;
+    }
+    if (!hadPayload) {
+      return;
+    }
+    const droppedFiles = event.dataTransfer.files;
+    if (droppedFiles?.length) {
+      toast.error("画像ファイルをドロップしてください。");
+      return;
+    }
+    toast.error(
+      "Webページからの画像ドロップを取り込めませんでした（サイト側の制限で取得できないことがあります）。画像を保存してからドロップするか、別の方法でアップロードしてください。",
+    );
+  };
 
   useEffect(() => {
     const fetchMagnet = async () => {
@@ -201,12 +259,31 @@ export default function EditMagnetPage() {
           className="space-y-4 rounded-[24px] bg-white p-5 shadow-sm"
           onSubmit={handleSubmit}
         >
-          <label className="relative block aspect-4/3 cursor-pointer overflow-hidden rounded-2xl border-2 border-dashed border-orange-200 bg-orange-50/40">
+          <label
+            className={`relative block aspect-4/3 cursor-pointer overflow-hidden rounded-2xl border-2 border-dashed bg-orange-50/40 transition ${
+              isDragOverPhoto ? "border-orange-400 ring-2 ring-orange-200" : "border-orange-200"
+            }`}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setIsDragOverPhoto(true);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+              setIsDragOverPhoto(true);
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setIsDragOverPhoto(false);
+              }
+            }}
+            onDrop={handlePhotoDrop}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={previewUrl}
               alt="写真プレビュー"
-              className="absolute inset-0 h-full w-full object-cover"
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
             />
             <input
               type="file"
@@ -214,19 +291,45 @@ export default function EditMagnetPage() {
               className="hidden"
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
-                setPhotoFile(file);
+                handlePhotoSelected(file);
               }}
               aria-label="写真を差し替え（任意）"
             />
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20">
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/20">
               <div className="rounded-2xl bg-white/90 px-4 py-3 text-center shadow-sm">
                 <p className="text-2xl">📷</p>
                 <p className="text-xs font-semibold text-orange-600">
-                  {photoFile ? "画像を変更する" : "写真を差し替え（任意）"}
+                  {photoFile ? "画像を変更する" : "写真を差し替え（クリック/ドラッグ&ドロップ）"}
                 </p>
               </div>
             </div>
           </label>
+          <section className="rounded-3xl border border-sky-100 bg-sky-50/60 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-sky-600">✨</span>
+              <h3 className="text-xs font-semibold tracking-wide text-sky-700">AI自動タグ提案</h3>
+            </div>
+            {isSuggestingTags ? (
+              <p className="mb-2 text-xs text-sky-700">候補を生成中...</p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              {suggestedTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs text-sky-700"
+                  onClick={() => {
+                    if (form.tags.includes(tag)) {
+                      return;
+                    }
+                    setForm({ ...form, tags: [...form.tags, tag] });
+                  }}
+                >
+                  #{tag} ＋
+                </button>
+              ))}
+            </div>
+          </section>
 
           <label className="block space-y-2">
             <span className="text-sm font-semibold text-gray-700">名前</span>
