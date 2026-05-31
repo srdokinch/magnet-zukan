@@ -16,13 +16,17 @@ type SuggestTagsRequest = {
 };
 
 type HuggingFaceImageClassificationResponse = Array<{ label?: string; score?: number }>;
+type HuggingFaceOcrResponse = Array<{ generated_text?: string; text?: string }>;
 type DeepLTranslationResponse = { translations?: Array<{ text?: string }> };
 
 const HF_IMAGE_CLASSIFICATION_MODEL_ID = "google/vit-base-patch16-224";
 const HF_IMAGE_CLASSIFICATION_URL = `https://router.huggingface.co/hf-inference/models/${HF_IMAGE_CLASSIFICATION_MODEL_ID}`;
+const HF_OCR_MODEL_ID = "microsoft/trocr-base-printed";
+const HF_OCR_URL = `https://router.huggingface.co/hf-inference/models/${HF_OCR_MODEL_ID}`;
 const DEFAULT_DEEPL_API_URL = "https://api-free.deepl.com/v2/translate";
 const MAX_SUGGESTED_TAGS = 3;
 const MAX_IMAGE_LABELS = 5;
+const MAX_OCR_TERMS = 2;
 const MIN_IMAGE_LABEL_SCORE = 0.001;
 const MAX_TAG_LENGTH = 12;
 const FALLBACK_TAGS = ["陶器", "地中海", "青色"];
@@ -66,6 +70,31 @@ const parseJsonBody = (rawBody: string, contentType: string | null, serviceName:
   } catch {
     return { error: `Invalid JSON response from ${serviceName}: ${rawBody.slice(0, 200)}` };
   }
+};
+
+const extractOcrText = (response: unknown) => {
+  if (!Array.isArray(response)) {
+    return "";
+  }
+
+  const first = (response as HuggingFaceOcrResponse)[0];
+  const raw =
+    (typeof first?.generated_text === "string" ? first.generated_text : "") ||
+    (typeof first?.text === "string" ? first.text : "");
+  return raw.trim();
+};
+
+const splitOcrTerms = (rawText: string) => {
+  if (!rawText) {
+    return [];
+  }
+
+  const terms = rawText
+    .split(/[^A-Za-z0-9]+/g)
+    .map((term) => term.trim())
+    .filter((term) => term.length >= 3);
+
+  return terms.filter((term, index, array) => array.findIndex((other) => other === term) === index);
 };
 
 const extractDeepLTexts = (body: unknown) => {
@@ -260,6 +289,41 @@ deno.serve(async (request) => {
       .slice(0, MAX_SUGGESTED_TAGS)
       .filter((item, index, array) => array.findIndex((other) => other.input === item.input) === index);
 
+    let ocrStatus = 0;
+    let ocrText = "";
+    let ocrRawPreview = "";
+    let ocrErrorPreview = "";
+    let ocrTerms: string[] = [];
+
+    try {
+      const ocrResponse = await fetch(HF_OCR_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${huggingFaceApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          inputs: imageBase64,
+          options: {
+            wait_for_model: true,
+          },
+        }),
+      });
+      ocrStatus = ocrResponse.status;
+      const ocrRawBody = await ocrResponse.text();
+      ocrRawPreview = ocrRawBody.slice(0, 200);
+      const ocrResult = parseJsonBody(
+        ocrRawBody,
+        ocrResponse.headers.get("content-type"),
+        "Hugging Face OCR",
+      );
+      ocrErrorPreview = ocrResponse.ok ? "" : toErrorPreview(ocrResult, ocrRawBody);
+      ocrText = extractOcrText(ocrResult);
+      ocrTerms = splitOcrTerms(ocrText).slice(0, MAX_OCR_TERMS);
+    } catch {
+      // OCR is optional. Continue with image labels when OCR fails.
+    }
+
     if (labelInputs.length === 0) {
       return new Response(
         JSON.stringify({
@@ -277,6 +341,14 @@ deno.serve(async (request) => {
                     rawPreview: "",
                     translatedTexts: [],
                     usedFallback: true,
+                  },
+                  ocr: {
+                    model: HF_OCR_MODEL_ID,
+                    status: ocrStatus,
+                    rawPreview: ocrRawPreview,
+                    errorPreview: ocrErrorPreview,
+                    text: ocrText,
+                    terms: ocrTerms,
                   },
                 },
               }
@@ -296,7 +368,7 @@ deno.serve(async (request) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        text: labelInputs.map((item) => item.input),
+        text: [...labelInputs.map((item) => item.input), ...ocrTerms],
         source_lang: "EN",
         target_lang: "JA",
       }),
@@ -331,6 +403,14 @@ deno.serve(async (request) => {
                   rawPreview: deepLRawPreview,
                   translatedTexts,
                   usedFallback: useFallback,
+                },
+                ocr: {
+                  model: HF_OCR_MODEL_ID,
+                  status: ocrStatus,
+                  rawPreview: ocrRawPreview,
+                  errorPreview: ocrErrorPreview,
+                  text: ocrText,
+                  terms: ocrTerms,
                 },
               },
             }

@@ -14,7 +14,7 @@ cp .env.example .env.local
 3. Set Supabase Edge Function secrets for AI tag suggestion.
    - Required: `HUGGING_FACE_API_KEY`, `DEEPL_API_KEY`
    - Optional endpoint override: `DEEPL_API_URL` (default: `https://api-free.deepl.com/v2/translate`)
-   - Optional debug: `DEBUG_AI_TAGS=true` (include intermediate labels in API response)
+   - Optional debug: `DEBUG_AI_TAGS=true` (include intermediate labels and OCR data in API response)
 
 ```bash
 supabase secrets set HUGGING_FACE_API_KEY=YOUR_HUGGING_FACE_API_KEY
